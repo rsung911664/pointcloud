@@ -1,0 +1,66 @@
+diff a/Lib/TLibEncoder/TEncGOP.cpp b/Lib/TLibEncoder/TEncGOP.cpp	(rejected hunks)
+@@ -1197,7 +1197,11 @@
+ // ====================================================================================================================
+ Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rcListPic,
+                            TComList<TComPicYuv*>& rcListPicYuvRecOut, std::list<AccessUnit>& accessUnitsInGOP,
++#if PCC_ME_EXT
++	                       Bool isField, Bool isTff, const InputColourSpaceConversion snr_conversion, const TEncAnalyze::OutputLogControl &outputLogCtrl, Bool usePccME)
++#else
+                            Bool isField, Bool isTff, const InputColourSpaceConversion snr_conversion, const TEncAnalyze::OutputLogControl &outputLogCtrl )
++#endif
+ {
+   // TODO: Split this function up.
+ 
+@@ -1757,6 +1761,52 @@
+       for(UInt nextCtuTsAddr = 0; nextCtuTsAddr < numberOfCtusInFrame; )
+       {
+         m_pcSliceEncoder->precompressSlice( pcPic );
++#if PCC_ME_EXT
++		if (pcSlice->getPOC() % PCC_ME_NUM_LAYERS_ACTIVE == 0 && usePccME)
++		{
++			//printf("\nPCC ME ACTIVE\n");
++			Int picWidth = pcPic->getPicYuvRec()->getWidth(COMPONENT_Y);
++			Int picHeight = pcPic->getPicYuvRec()->getHeight(COMPONENT_Y);
++
++			Int blockToPatchWidth = picWidth / 16;
++			Int blockToPatchHeight = picHeight / 16;
++
++			Int currPOC = pcSlice->getPOC() / PCC_ME_NUM_LAYERS_ACTIVE;
++			long long offset = (long long)currPOC * blockToPatchWidth * blockToPatchHeight;
++
++			std::string blockToPatchFileName = m_pcEncTop->getBlockToPatchFileName();
++			FILE* blockToPatchFile = NULL;
++			blockToPatchFile = fopen(blockToPatchFileName.c_str(), "rb");
++			fseek(blockToPatchFile, offset * sizeof(long long), SEEK_SET);
++			long long* blockToPatch = pcPic->getBlockToPatch();
++			size_t readSize = fread(blockToPatch, sizeof(long long), blockToPatchWidth * blockToPatchHeight, blockToPatchFile);
++			if (readSize != blockToPatchWidth * blockToPatchHeight)
++			{
++				printf("error: Resolution does not match");
++			}
++			fclose(blockToPatchFile);
++
++			offset = (long long)currPOC * picWidth * picHeight;
++			std::string occupancyMapFileName = m_pcEncTop->getOccupancyMapFileName();
++			FILE* occupancyMapFile = NULL;
++			occupancyMapFile = fopen(occupancyMapFileName.c_str(), "rb");
++			fseek(occupancyMapFile, offset * sizeof(Int), SEEK_SET);
++			Int* occupancyMap = pcPic->getOccupancyMap();
++			readSize = fread(occupancyMap, sizeof(Int), picWidth * picHeight, occupancyMapFile);
++			if (readSize != picWidth * picHeight)
++			{
++				printf("error: Resolution does not match");
++			}
++			fclose(occupancyMapFile);
++		}
++		if (usePccME)
++		{
++			for (Int i = 0; i < PCC_ME_EXT_MAX_NUM_PATCHES; i++)
++			{
++				g_patchesChange[i] = true;
++			}
++		}
++#endif
+         m_pcSliceEncoder->compressSlice   ( pcPic, false, false );
+ 
+         const UInt curSliceSegmentEnd = pcSlice->getSliceSegmentCurEndCtuTsAddr();

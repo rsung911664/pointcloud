@@ -1,0 +1,123 @@
+diff a/Lib/TLibEncoder/TEncSearch.cpp b/Lib/TLibEncoder/TEncSearch.cpp	(rejected hunks)
+@@ -4080,8 +4080,15 @@
+                         iRoiHeight,
+                         pcYuv->getStride(COMPONENT_Y),
+                         pcCU->getSlice()->getSPS()->getBitDepth(CHANNEL_TYPE_LUMA),
++#if PCC_ME_EXT
+                         roiPosX,
++                        roiPosY,
++                        iRefIdxPred,
++                        eRefPicList);
++#else
++                        roiPosX,
+                         roiPosY);
++#endif
+   xInitTileBorders(pcCU, &cPattern);
+ #else
+   cPattern.initPattern( pcYuv->getAddr  ( COMPONENT_Y, uiPartAddr ),
+@@ -4397,6 +4404,105 @@
+   // set rcMv (Median predictor) as start point and as best point
+   xTZSearchHelp( pcPatternKey, cStruct, rcMv.getHor(), rcMv.getVer(), 0, 0 );
+ 
++#if PCC_ME_EXT
++  if (m_pcEncCfg->getUsePCCExt()) {
++    Int xCoor = pcPatternKey->getROIYPosX() + pcPatternKey->getROIYWidth() / PCC_ME_NUM_LAYERS_ACTIVE;
++    Int yCoor = pcPatternKey->getROIYPosY() + pcPatternKey->getROIYHeight() / PCC_ME_NUM_LAYERS_ACTIVE;
++  
++    Int picWidth = pcCU->getSlice()->getSPS()->getPicWidthInLumaSamples();
++    Int occupancyResolution = 16;
++    Int blockToPatchWidth = picWidth / occupancyResolution;
++  
++    Int* occupancyMap = pcCU->getPic()->getOccupancyMap();
++    long long* blockToPatch = pcCU->getPic()->getBlockToPatch();
++  
++    if (pcCU->getSlice()->getPOC() % 2 == 0 && occupancyMap[yCoor * picWidth + xCoor])
++    {
++  	  Int xBlockIndex = xCoor / occupancyResolution;
++  	  Int yBlockIndex = yCoor / occupancyResolution;
++  
++  	  Int patchIndex = blockToPatch[yBlockIndex * blockToPatchWidth + xBlockIndex] - 1;          // should be minus 1
++  	  Int frameIndex = pcCU->getSlice()->getPOC() / PCC_ME_NUM_LAYERS_ACTIVE;
++  
++  	  // current 3D coordinate derivation
++  	  Int projectIndex = g_projectionIndex[frameIndex][patchIndex];
++  
++  	  Int patchD1 = g_patch3DInfo[frameIndex][patchIndex][0];
++  	  Int patchU1 = g_patch3DInfo[frameIndex][patchIndex][1];
++  	  Int patchV1 = g_patch3DInfo[frameIndex][patchIndex][2];
++  
++  	  Int patchU0 = g_patch2DInfo[frameIndex][patchIndex][0];
++  	  Int patchV0 = g_patch2DInfo[frameIndex][patchIndex][1];
++  
++  	  Int xCoor3D = patchU1 + (xCoor - patchU0 * occupancyResolution);
++  	  Int yCoor3D = patchV1 + (yCoor - patchV0 * occupancyResolution);
++  
++  
++  	  RefPicList eRefPicList = pcPatternKey->getRefPicList();
++  	  Int refIdx = pcPatternKey->getRefIndex();
++  
++  	  // find the suitable patch in the reference frame
++  	  Int refPOC = pcCU->getSlice()->getRefPOC(eRefPicList, refIdx);
++  	  Int refFrameIndex = refPOC / 2;
++  	  Int refNumPatches = g_numPatches[refFrameIndex];
++  
++  	  Int bestPatchIndex = 0;
++  	  Int bestDist = MAX_INT;
++  	  for (Int refPatchIdx = 0; refPatchIdx < refNumPatches; refPatchIdx++)
++  	  {
++  	    Int refProjectionIndex = g_projectionIndex[refFrameIndex][refPatchIdx];
++  	  
++  	    if (refProjectionIndex != projectIndex)
++  	    {
++  	  	  continue;
++  	    }
++  	  
++  	    Int refPatchU1 = g_patch3DInfo[refFrameIndex][refPatchIdx][1];
++  	    Int refPatchV1 = g_patch3DInfo[refFrameIndex][refPatchIdx][2];
++  	  
++  	    Int refPatchSizeU0 = g_patch2DInfo[refFrameIndex][refPatchIdx][2];
++  	    Int refPatchSizeV0 = g_patch2DInfo[refFrameIndex][refPatchIdx][3];
++	  
++	    Int refPatch3DEndU1 = refPatchU1 + refPatchSizeU0 * occupancyResolution - 1;
++	    Int refPatch3DEndV1 = refPatchV1 + refPatchSizeV0 * occupancyResolution - 1;
++	  
++	    Bool xCond = (xCoor3D >= refPatchU1 && xCoor3D <= refPatch3DEndU1);
++	    Bool yCond = (yCoor3D >= refPatchV1 && yCoor3D <= refPatch3DEndV1);
++	  
++	    if (xCond && yCond)
++	    {
++	  	  Int refPatchD1 = g_patch3DInfo[refFrameIndex][refPatchIdx][0];
++	  	  Int patchDist = abs(patchD1 - refPatchD1);
++	  
++	  	  if (patchDist < bestDist)
++	  	  {
++	  	    bestDist = patchDist;
++	  	    bestPatchIndex = refPatchIdx;
++	  	  }
++	    }
++	  }
++
++	  Int diff3DU = g_patch3DInfo[frameIndex][patchIndex][1] - g_patch3DInfo[refFrameIndex][bestPatchIndex][1];
++	  Int diff3DV = g_patch3DInfo[frameIndex][patchIndex][2] - g_patch3DInfo[refFrameIndex][bestPatchIndex][2];
++
++	  Int diff2DU = (g_patch2DInfo[refFrameIndex][bestPatchIndex][0] - g_patch2DInfo[frameIndex][patchIndex][0]) * occupancyResolution;
++	  Int diff2DV = (g_patch2DInfo[refFrameIndex][bestPatchIndex][1] - g_patch2DInfo[frameIndex][patchIndex][1]) * occupancyResolution;
++
++	  Int diffTotalU = diff3DU + diff2DU;
++	  Int diffTotalV = diff3DV + diff2DV;
++
++	  TComMv startMV(diffTotalU << 2, diffTotalV << 2);
++	  pcCU->clipMv(startMV);
++#if ME_ENABLE_ROUNDING_OF_MVS
++	  startMV.divideByPowerOf2(2);
++#else
++	  startMV >>= 2;
++#endif
++	  xTZSearchHelp(pcPatternKey, cStruct, startMV.getHor(), startMV.getVer(), 0, 0);
++	}
++  }
++#endif
++
+   // test whether one of PRED_A, PRED_B, PRED_C MV is better start point than Median predictor
+   if ( bTestOtherPredictedMV )
+   {

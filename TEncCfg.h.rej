@@ -1,0 +1,32 @@
+diff a/Lib/TLibEncoder/TEncCfg.h b/Lib/TLibEncoder/TEncCfg.h	(rejected hunks)
+@@ -131,6 +131,12 @@
+ };
+ 
+ protected:
++#if PCC_ME_EXT
++	std::string m_blockToPatchFileName;
++	std::string m_occupancyFileName;
++	Bool        m_usePCCExt;
++	//std::string m_patchInfoFileName;
++#endif
+   //==== File I/O ========
+   Int       m_iFrameRate;
+   Int       m_FrameSkip;
+@@ -559,6 +565,17 @@
+   virtual ~TEncCfg()
+   {}
+ 
++#if PCC_ME_EXT
++  Void setBlockToPatchFileName(std::string blockToPatchFileName) { m_blockToPatchFileName = blockToPatchFileName; }
++  std::string getBlockToPatchFileName() { return m_blockToPatchFileName; }
++
++  Void setOccupancyMapFileName(std::string occupancyMapFileName) { m_occupancyFileName = occupancyMapFileName; }
++  std::string getOccupancyMapFileName() { return m_occupancyFileName; }
++
++  Void setUsePCCExt(Bool value) { m_usePCCExt = value; }
++  Bool getUsePCCExt()         const { return m_usePCCExt; }
++#endif
++
+   Void setProfile(Profile::Name profile) { m_profile = profile; }
+   Void setLevel(Level::Tier tier, Level::Name level) { m_levelTier = tier; m_level = level; }
+ 

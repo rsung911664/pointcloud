@@ -1,0 +1,27 @@
+diff a/Lib/TLibEncoder/TEncTop.cpp b/Lib/TLibEncoder/TEncTop.cpp	(rejected hunks)
+@@ -362,7 +362,12 @@
+   }
+ 
+   // compress GOP
++#if PCC_ME_EXT
++  if (m_usePCCExt) printf("\n\tPCC ME GOP #1 ACTIVE\n");
++  m_cGOPEncoder.compressGOP(m_iPOCLast, m_iNumPicRcvd, m_cListPic, rcListPicYuvRecOut, accessUnitsOut, false, false, snrCSC, getOutputLogControl(), m_usePCCExt);
++#else
+   m_cGOPEncoder.compressGOP(m_iPOCLast, m_iNumPicRcvd, m_cListPic, rcListPicYuvRecOut, accessUnitsOut, false, false, snrCSC, getOutputLogControl());
++#endif
+ 
+   if ( m_RCEnableRateControl )
+   {
+@@ -466,7 +471,12 @@
+     if ( m_iNumPicRcvd && ((flush&&fieldNum==1) || (m_iPOCLast/2)==0 || m_iNumPicRcvd==m_iGOPSize ) )
+     {
+       // compress GOP
++#if PCC_ME_EXT
++      if (m_usePCCExt) printf("\n\tPCC ME GOP #2 ACTIVE\n");
++	  m_cGOPEncoder.compressGOP(m_iPOCLast, m_iNumPicRcvd, m_cListPic, rcListPicYuvRecOut, accessUnitsOut, false, false, snrCSC, getOutputLogControl(), m_usePCCExt);
++#else
+       m_cGOPEncoder.compressGOP(m_iPOCLast, m_iNumPicRcvd, m_cListPic, rcListPicYuvRecOut, accessUnitsOut, true, isTff, snrCSC, getOutputLogControl());
++#endif
+       iNumEncoded += m_iNumPicRcvd;
+       m_uiNumAllPicCoded += m_iNumPicRcvd;
+       m_iNumPicRcvd = 0;
