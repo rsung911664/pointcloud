@@ -652,7 +652,7 @@ Void TEncCu::xCompressCU( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const 
         rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
 
         //Fast CU decision
-        bool fastOccupancyDci = false; //控制占位圖判斷的開關，true打開，false關閉
+        bool fastOccupancyDci = true; //控制占位圖判斷的開關，true打開，false關閉
         bool SKIPME = true;
         if (fastOccupancyDci && rpcBestCU->getQP(0) > 10)
             SKIPME = occupancyDci(uiWidth/4, uiTPelY/4, uiLPelX/4, rpcBestCU->getSlice()->getPOC());//如果點雲是320x320這邊的width, TPelY, LPelX要除4
